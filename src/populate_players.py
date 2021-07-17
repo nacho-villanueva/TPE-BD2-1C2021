@@ -1,14 +1,10 @@
 import math
 import random
-from pprint import pprint
 
-import pymongo
+from .level_info import CHARACTER_LEVELS
+from src import utils
 
-import Utils
-from MongoClient import get_pokemons_collection, get_players_collection
-from level_info import CHARACTER_LEVELS
-
-NAMES_FILE = "names.txt"
+NAMES_FILE = "src/names.txt"
 LEVELS_INFO_FILE = "level_info.txt"
 
 MAX_LEVEL = 40
@@ -25,7 +21,7 @@ offset = 0
 
 def get_random_name():
     global names_i, names_j, offset
-    n = names[(names_i + offset) % len(names)] + names[(names_j - offset) % len(names)] + str(names_i)
+    n = names[(names_i + offset) % len(names)] + "_" + names[(names_j - offset) % len(names)] + str(names_i)
     names_i += 1
     names_j -= 1
     if names_i >= len(names):
@@ -96,7 +92,7 @@ def generate_random_pokemon(player_level, pokemons_collection, pokemon_type):
         "height": pokemon_type["height"] * random_coefficient,
         "health": round(random.uniform(pokemon_type["health"]["min"], pokemon_type["health"]["max"])),
         "cp": cp,
-        "capture_timestamp": Utils.random_datetime(min_year=2016)
+        "capture_timestamp": utils.random_datetime(min_year=2016)
     }
     return poke
 
@@ -138,9 +134,5 @@ def generate_player(pokemons_collection):
 def populate_players(players_collection, pokemons_collection, player_count=100):
     players = []
     for i in range(player_count):
-        print(i)
         players.append(generate_player(pokemons_collection))
     players_collection.insert_many(players)
-
-
-populate_players(get_players_collection(), get_pokemons_collection(), 1000)

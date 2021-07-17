@@ -1,8 +1,6 @@
 import requests
 from lxml import html
 
-from MongoClient import *
-
 WIKI_URL = "https://pokemongo.fandom.com/"
 
 X_PATHS = {
@@ -21,7 +19,8 @@ X_PATHS = {
 def get_attribute(tree, attr):
     attr_elem = tree.xpath(X_PATHS[attr])
     if len(attr_elem) > 0:
-        return attr_elem[0].text
+        text = attr_elem[0].text
+        return text.replace("\n", "").replace("\t", "")
     else:
         return None
 
@@ -41,18 +40,29 @@ def get_list_of_pokemon():
     pokemons = []
     all_pokemon_elem = tree.xpath("//div[@class='pogo-list-item-name']/a")
     for elem in all_pokemon_elem:
-        pokemons.append(elem.get("href"))
+        if "Nidoran" in elem.get("href"):
+            continue
+        if elem.get("href") not in pokemons:
+            pokemons.append(elem.get("href"))
     return pokemons
 
-def populate_pokemons_collection(pokemons_collection):
 
+def populate_pokemons_collection(pokemons_collection, bar=None):
     pokemon_list = get_list_of_pokemon()
     all_pokemons = []
 
     names_i = 0
+    i = 0
 
-    for p in pokemon_list[752:]:
+    if bar is not None:
+        bar.maxval = len(pokemon_list)
+
+    for p in pokemon_list:
         info = get_info_from_wikia(p)
+
+        i += 1
+        if bar is not None:
+            bar.update(i)
 
         try:
             cp = info["cp_range"].replace(" ", "").replace(",", "").split("-")
@@ -79,15 +89,13 @@ def populate_pokemons_collection(pokemons_collection):
             }
             all_pokemons.append(pokemon)
             names_i += 1
-            print(pokemon["name"])
         except ValueError:
             continue
-        if names_i >= 16:
+        if names_i >= 64:
             pokemons_collection.insert_many(all_pokemons)
             all_pokemons = []
             names_i = 0
 
+
     if all_pokemons:
         pokemons_collection.insert_many(all_pokemons)
-
-# populate_pokemons_collection(get_pokemons_collection()) TODO: ADD TO API/CLIENT
