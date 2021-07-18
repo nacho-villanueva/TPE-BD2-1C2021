@@ -1,4 +1,4 @@
-CHARACTER_LEVELS = [
+PLAYER_LEVELS = [
     {'level': 1,
      'exp': 0,
      'rewards': [{'item': 'Poke Ball', 'amount': 50}, {'item': 'Incubator Unlimited', 'amount': 1},

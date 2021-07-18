@@ -1,7 +1,7 @@
 import math
 import random
 
-from .level_info import CHARACTER_LEVELS
+from .level_info import PLAYER_LEVELS
 from src import utils
 
 NAMES_FILE = "src/names.txt"
@@ -35,7 +35,7 @@ def get_random_name():
 def get_level_info(level):
     rewards = {}
     for i in range(level):
-        for r in CHARACTER_LEVELS[i]["rewards"]:
+        for r in PLAYER_LEVELS[i]["rewards"]:
             current_amount = 0
             if r["item"] in rewards:
                 current_amount = rewards[r["item"]]
@@ -43,7 +43,7 @@ def get_level_info(level):
     if level == MAX_LEVEL:
         xp_for_next_level = 0
     else:
-        xp_for_next_level = CHARACTER_LEVELS[level]["exp"]
+        xp_for_next_level = PLAYER_LEVELS[level]["exp"]
     return xp_for_next_level, rewards
 
 
