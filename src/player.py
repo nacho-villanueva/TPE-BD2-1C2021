@@ -1,6 +1,6 @@
+import asyncio
 from datetime import datetime
 
-import redis
 from fastapi import APIRouter, HTTPException, Request, status
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
@@ -8,6 +8,7 @@ from typing import AnyStr
 
 from src.configurations import *
 from src.level_info import PLAYER_LEVELS
+from src.utils import get_distance
 
 
 class Message(BaseModel):
@@ -40,7 +41,14 @@ player_router = APIRouter(prefix="/player", tags=["Player Requests"])
 
 @player_router.post("/{name}/")
 async def login_player(name: str, coords: CoordinatesModel, request: Request):
-    request.app.state.redis.geoadd("players", coords.lat, coords.long, name)
+    collection = request.app.state.mongodb[MONGODB_DB][MONGODB_PLAYERS_COLLECTION]
+    if await collection.find_one({'name': name}) is not None:
+        await asyncio.wait([
+            request.app.state.redis.geoadd("players", coords.lat, coords.long, name),
+            request.app.state.redis.hset(f"players:{name}", "walked_distance", 0)
+        ])
+        return
+    return HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"User {name} not registered")
 
 
 @player_router.put("/{name}", status_code=status.HTTP_201_CREATED, response_model=PlayerModel,
@@ -63,19 +71,42 @@ async def register_player(name: str, request: Request):
     raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=f"Player {name} already exists")
 
 
+async def update_distance(old_pos, new_pos, name, state):
+    dist = get_distance(old_pos[1], old_pos[0], new_pos.long, new_pos.lat)
+    walked = await state.redis.hincrbyfloat(f"players:{name}", "walked_distance", dist)
+    if walked > 1:
+        state.redis.hset(f"players:{name}", "walked_distance", 0)
+        collection = state.mongodb[MONGODB_DB][MONGODB_PLAYERS_COLLECTION]
+        collection.update_one({'name': name}, {'$inc': {'walked_distance': walked}})
+
+
 @player_router.post("/{name}/move", status_code=status.HTTP_200_OK, description="Move player to new coordinates.")
-async def move_player(name: str, request: Request):
-    pass
+async def move_player(name: str, new_position: CoordinatesModel, request: Request):
+    old_pos = await request.app.state.redis.geopos("players", name)
+    if len(old_pos) == 1:
+        asyncio.ensure_future(request.app.state.redis.geoadd("players", new_position.lat, new_position.long, name))
+        asyncio.ensure_future(update_distance(old_pos[0], new_position, name, request.app.state))
+        return
+    return HTTPException(status_code=status.HTTP_409_CONFLICT, detail=f"Player {name} not found")
+
+
+@player_router.get("/{name}/position", status_code=status.HTTP_200_OK, response_model=CoordinatesModel)
+async def get_player_position(name: str, request: Request):
+    pos = await request.app.state.redis.geopos("players", name)
+    if len(pos) > 0:
+        return CoordinatesModel(lat=pos[0][0], long=pos[0][1])
+    return HTTPException(status_code=status.HTTP_409_CONFLICT, detail=f"Player {name} not found")
 
 
 @player_router.get("/{name}", status_code=status.HTTP_200_OK, response_model=PlayerModel,
-                   responses={200: {"model": PlayerModel}, 404: {"detail": AnyStr}})
+                   responses={404: {}, 422: {}})
 async def get_player(name: str, request: Request):
     player = await request.app.state.mongodb[MONGODB_DB][MONGODB_PLAYERS_COLLECTION].find_one({'name': name})
     if player is not None:
         return JSONResponse(status_code=status.HTTP_200_OK, content=player)
 
     raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Player {name} not found")
+
 
 def player_session_expiration(msg):
     pass

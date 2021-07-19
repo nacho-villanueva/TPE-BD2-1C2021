@@ -29,7 +29,7 @@ async def startup_event():
     app.state.redis = await create_redis_pool(REDIS_URI)
 
     # Set Redis config to notify on Key Expired
-    app.state.redis.config_set("notify-keyspace-events", "Ex")
+    await app.state.redis.config_set("notify-keyspace-events", "Ex")
 
     ch, = await app.state.redis.psubscribe('__key*__:expired')
     asyncio.get_running_loop().create_task(reader(ch))

@@ -1,5 +1,6 @@
 import random
 from datetime import datetime, timedelta
+from math import radians, sin, atan2, sqrt, cos
 
 
 def random_datetime(min_year=1900, max_year=datetime.now().year):
@@ -9,6 +10,23 @@ def random_datetime(min_year=1900, max_year=datetime.now().year):
     end = start + timedelta(days=365 * years)
     return start + (end - start) * random.random()
 
+
+def get_distance(lat_a, lon_a, lat_b, lon_b):
+    R = 6373.0
+
+    lat1 = radians(lat_a)
+    lon1 = radians(lon_a)
+    lat2 = radians(lat_b)
+    lon2 = radians(lon_b)
+
+    dlon = lon2 - lon1
+    dlat = lat2 - lat1
+    a = (sin(dlat / 2)) ** 2 + cos(lat1) * cos(lat2) * (sin(dlon / 2)) ** 2
+    c = 2 * atan2(sqrt(a), sqrt(1 - a))
+    return R * c
+
+
+print(get_distance(-34.480408360711515, -58.50684100026928, -34.47806466991218, -58.50277477154357))
 
 def print_init_title():
     print("""
