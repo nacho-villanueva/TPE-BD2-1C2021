@@ -40,7 +40,7 @@ async def login(user: NameNCoordsModel, request: Request):
     if (player := await collection.find_one({'name': user.player_name})) is not None:
         await login_player(player, user.coordinates, request.app.state)
         return
-    return HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"User {user.player_name} not registered")
+    raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"User {user.player_name} not registered")
 
 
 @player_router.post("/{name}/logout")
@@ -91,21 +91,21 @@ async def move_player(body: NameNCoordsModel, request: Request):
         asyncio.ensure_future(update_distance(old_pos[0], body.coordinates, body.player_name, request.app.state))
         renew_player_expiration(body.player_name, request.app.state)
         return
-    return HTTPException(status_code=status.HTTP_409_CONFLICT, detail=f"Player {body.player_name} not found")
+    raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=f"Player {body.player_name} not found")
 
 
 @player_router.get("/{name}/position", status_code=status.HTTP_200_OK, response_model=CoordinatesModel)
 async def get_player_position(name: str, request: Request):
     pos = await request.app.state.redis.geopos("players", name)
-    if len(pos) > 0:
+    if pos[0] is not None:
         return CoordinatesModel(lat=pos[0][0], long=pos[0][1])
-    return HTTPException(status_code=status.HTTP_409_CONFLICT, detail=f"Player {name} not found")
+    raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=f"Player {name} not found")
 
 
 @player_router.get("/{name}/online", status_code=status.HTTP_200_OK)
 async def is_player_online(name: str, request: Request):
     pos = await request.app.state.redis.geopos("players", name)
-    if len(pos) > 0:
+    if pos[0] is not None:
         return True
     return False
 
