@@ -1,9 +1,11 @@
 import asyncio
 from datetime import datetime
+from typing import List
 
 from fastapi import APIRouter, HTTPException, Request, status
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
+from pokemon import PokemonModel
 
 from src.configurations import *
 from src.level_info import PLAYER_LEVELS
@@ -127,3 +129,15 @@ async def player_session_expiration(name, state):
     if walked > 0:
         update_mongo_distance(name, walked, state)
     await state.redis.delete(f"players:{name}")
+
+
+@player_router.get("/{name}/nearby", status_code=status.HTTP_200_OK, response_model=List[PokemonModel])
+async def get_nearby_pokemons(name: str, request: Request):
+    pos = await request.app.state.redis.geopos("players", name, withcoords = True)
+    found = await request.app.state.redis.georadius("pokemons", pos[0][0], pos[0][1], 20, unit="m")
+    if len(found) > 0:
+        return found
+
+    return HTTPException(status_code=status.HTTP_409_CONFLICT, detail=f"Pokemons not found nearby")
+
+

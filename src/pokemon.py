@@ -1,14 +1,18 @@
-from typing import Optional
+from typing import List, Optional
 import asyncio
 import uuid
 
 from fastapi import APIRouter, Request, HTTPException
 from pydantic.main import BaseModel
+from player import CoordinatesModel
 
 from src.configurations import *
+from utils import generate_nearby_pos
 
 pokemon_router = APIRouter(prefix="/pokemon")
 
+# Each pokemon will leave after 5 hours
+POKEMON_EXPIRATION = 60 * 5
 
 class PokemonModel(BaseModel):
     name: str
