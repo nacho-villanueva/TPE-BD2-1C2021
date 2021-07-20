@@ -1,16 +1,12 @@
 import math
 import random
 
+from .configurations import *
 from .level_info import PLAYER_LEVELS
 from src import utils
 
 NAMES_FILE = "src/names.txt"
 LEVELS_INFO_FILE = "level_info.txt"
-
-MAX_LEVEL = 40
-MAX_POKEMON_CAPTURED = 300
-
-POWER_UP_COEFFICIENT = 1.025
 
 nf = open(NAMES_FILE)
 names = nf.readline().split(",")

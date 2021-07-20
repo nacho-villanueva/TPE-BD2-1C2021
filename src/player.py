@@ -5,12 +5,13 @@ from fastapi import APIRouter, HTTPException, Request, status
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
+from src.models import CoordinatesModel
 from src.configurations import *
 from src.level_info import PLAYER_LEVELS
 from src.utils import get_distance
 
 # Player will logout after 1 hour = 60 * 60 seconds
-PLAYER_EXPIRATION = 60
+PLAYER_EXPIRATION = 60 * 60
 
 
 class Message(BaseModel):
@@ -31,11 +32,6 @@ class PlayerModel(BaseModel):
 
     def __str__(self):
         return self.name
-
-
-class CoordinatesModel(BaseModel):
-    long: float = Field(..., example=-34.6033503396)
-    lat: float = Field(..., example=-58.3816562306)
 
 
 player_router = APIRouter(prefix="/player", tags=["Player Requests"])
@@ -127,3 +123,17 @@ async def player_session_expiration(name, state):
     if walked > 0:
         update_mongo_distance(name, walked, state)
     await state.redis.delete(f"players:{name}")
+
+
+async def update_player_exp(player_object, increment_exp, state):
+    new_exp = PLAYER_LEVELS[player_object["level"]]["exp"] + increment_exp
+    new_level = player_object["level"]
+    if player_object["level"] < MAX_LEVEL and PLAYER_LEVELS[player_object["level"]]["exp"] <= new_exp:
+        new_level = player_object["level"] + 1
+        new_exp -= PLAYER_LEVELS[player_object["level"]]["exp"]
+    state.mongodb.update({"name": player_object["name"]}, {
+        "$set": {
+            "level": new_level,
+            "experience": new_exp
+        }
+    })
