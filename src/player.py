@@ -102,12 +102,20 @@ async def get_player_position(name: str, request: Request):
     return HTTPException(status_code=status.HTTP_409_CONFLICT, detail=f"Player {name} not found")
 
 
+@player_router.get("/{name}/online", status_code=status.HTTP_200_OK)
+async def is_player_online(name: str, request: Request):
+    pos = await request.app.state.redis.geopos("players", name)
+    if len(pos) > 0:
+        return True
+    return False
+
+
 @player_router.get("/{name}", status_code=status.HTTP_200_OK, response_model=PlayerModel,
                    responses={404: {}, 422: {}})
 async def get_player(name: str, request: Request):
     player = await request.app.state.mongodb[MONGODB_DB][MONGODB_PLAYERS_COLLECTION].find_one({'name': name})
     if player is not None:
-        return JSONResponse(status_code=status.HTTP_200_OK, content=player)
+        return player
 
     raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Player {name} not found")
 
@@ -196,4 +204,5 @@ async def level_up_pokemon(name: str, index: int, request: Request):
                             detail=f"Not enough stardust. Current: {player['stardust']} - Needed: {POKEMON_LEVEL[pokemon['level']]['stardust_needed']}")
 
     await player_collection.update_one({"name": name}, {"$inc": {f"pokemons.{index}.level": 1,
-                                                                 "stardust": -POKEMON_LEVEL[pokemon['level']]['stardust_needed']}})
+                                                                 "stardust": -POKEMON_LEVEL[pokemon['level']][
+                                                                     'stardust_needed']}})
