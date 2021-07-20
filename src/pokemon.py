@@ -1,4 +1,6 @@
 from typing import Optional
+import asyncio
+import uuid
 
 from fastapi import APIRouter, Request, HTTPException
 from pydantic.main import BaseModel
@@ -36,7 +38,7 @@ async def spawn_pokemon(pokemon_type: str, coords: CoordinatesModel, request: Re
         for pokemon in pokemons: #100m
             new_coords = generate_nearby_pos(coords.lat, coords.long, 100)
             await asyncio.wait([
-                request.app.state.redis.geoadd("pokemons", new_coords.lat, new_coords.long, "{nonce},{pokemon.name}"),
+                request.app.state.redis.geoadd("pokemons", new_coords.lat, new_coords.long, "{uuid.uuid4()}:{pokemon.name}"),
                 request.app.state.redis.setex(f"pokemons:{pokemon.name}:expire", POKEMON_EXPIRATION, "EXPIRE")            
             ])    
         return pokemons        
