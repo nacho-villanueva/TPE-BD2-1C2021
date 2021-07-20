@@ -1,4 +1,5 @@
 import random
+import numpy as np
 from datetime import datetime, timedelta
 from math import radians, sin, atan2, sqrt, cos
 
@@ -25,6 +26,16 @@ def get_distance(lat_a, lon_a, lat_b, lon_b):
     c = 2 * atan2(sqrt(a), sqrt(1 - a))
     return R * c
 
+def generate_nearby_pos(lat, lon, distance):
+    r = distance/ 111300
+    u = np.random.uniform(0,1)
+    v = np.random.uniform(0,1)
+    w = r * np.sqrt(u)
+    t = 2 * np.pi * v
+    x = w * np.cos(t)
+    x1 = x / np.cos(lon)
+    y = w * np.sin(t)
+    return (lat + x1, lon +y)
 
 print(get_distance(-34.480408360711515, -58.50684100026928, -34.47806466991218, -58.50277477154357))
 
