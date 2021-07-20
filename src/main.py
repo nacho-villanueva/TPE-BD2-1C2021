@@ -5,9 +5,9 @@ from aioredis.pubsub import Receiver
 from fastapi import FastAPI
 from motor.motor_asyncio import AsyncIOMotorClient
 
-from src.pokemon import pokemon_router
-from src.player import player_router, player_session_expiration
-from src.configurations import *
+from pokemon import pokemon_router
+from player import player_router, player_session_expiration
+from configurations import *
 
 app = FastAPI(
     title="Pokemon GO",

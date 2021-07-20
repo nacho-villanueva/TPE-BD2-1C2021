@@ -7,9 +7,9 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 from pokemon import PokemonModel
 
-from src.configurations import *
-from src.level_info import PLAYER_LEVELS
-from src.utils import get_distance
+from configurations import *
+from level_info import PLAYER_LEVELS
+from utils import get_distance
 
 # Player will logout after 1 hour = 60 * 60 seconds
 PLAYER_EXPIRATION = 60

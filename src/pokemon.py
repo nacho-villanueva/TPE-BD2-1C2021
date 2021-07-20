@@ -1,12 +1,12 @@
-from typing import List, Optional
+from typing import Dict, List, Optional
 import asyncio
 import uuid
 
 from fastapi import APIRouter, Request, HTTPException
+from pydantic import Field
 from pydantic.main import BaseModel
-from player import CoordinatesModel
 
-from src.configurations import *
+from configurations import *
 from utils import generate_nearby_pos
 
 pokemon_router = APIRouter(prefix="/pokemon")
@@ -25,6 +25,10 @@ class PokemonModel(BaseModel):
     height: float
     weight: float
 
+class CoordinatesModel(BaseModel):
+    long: float = Field(..., example=-34.6033503396)
+    lat: float = Field(..., example=-58.3816562306)
+
 
 @pokemon_router.get("/{pokemon_type}", response_model=PokemonModel)
 async def get_pokemon_type(pokemon_type: str, request: Request):
@@ -34,20 +38,25 @@ async def get_pokemon_type(pokemon_type: str, request: Request):
 
     raise HTTPException(status_code=404, detail=f"Pokemon {pokemon} not found")
 
-@pokemon_router.post("/spawn_pokemons", response_model=List[PokemonModel])
-async def spawn_pokemon(pokemon_type: str, coords: CoordinatesModel, request: Request):
-    pokemons = await request.app.state.mongodb[MONGODB_DB][MONGODB_POKEMONS_COLLECTION].aggregate([{ "$sample": { "size": 10 } }])
+@pokemon_router.put("/spawn_pokemons", response_model=Dict)
+async def spawn_pokemon(coords: CoordinatesModel, request: Request):
+    pokemons = request.app.state.mongodb[MONGODB_DB][MONGODB_POKEMONS_COLLECTION].aggregate([{ "$sample": { "size": 10 } }])
     
-    if len(pokemons) > 0:
-        for pokemon in pokemons: #100m
-            new_coords = generate_nearby_pos(coords.lat, coords.long, 100)
-            await asyncio.wait([
-                request.app.state.redis.geoadd("pokemons", new_coords.lat, new_coords.long, "{uuid.uuid4()}:{pokemon.name}"),
-                request.app.state.redis.setex(f"pokemons:{pokemon.name}:expire", POKEMON_EXPIRATION, "EXPIRE")            
-            ])    
-        return pokemons        
+    pokemons_ret = {}
+    async for pokemon in pokemons: #100m
+        new_coords = generate_nearby_pos(coords.lat, coords.long, 100)
+        id = uuid.uuid4()
+        coords_str = f"{new_coords[0]},{new_coords[1]}"
+        pokemons_ret[id] = {coords_str:pokemon['name']}
+        await asyncio.wait([
+            request.app.state.redis.geoadd("pokemons", new_coords[0], new_coords[1], "{id}:{pokemon['name']}"),
+            request.app.state.redis.setex(f"pokemons:{pokemon['name']}:expire", POKEMON_EXPIRATION, "EXPIRE")            
+        ])    
 
-    raise HTTPException(status_code=404, detail=f"Pokemons not found")
+    if not pokemons_ret:
+        raise HTTPException(status_code=404, detail=f"Pokemons not found")
     
+    return pokemons_ret
+
 async def get_nearby_pokemons():
     pass
