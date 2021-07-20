@@ -1,7 +1,7 @@
 import asyncio
 from typing import Optional, List
 
-from fastapi import APIRouter, Request, status
+from fastapi import APIRouter, Request, status, HTTPException
 from pydantic import BaseModel, Field
 
 from .level_info import PLAYER_LEVELS
@@ -41,13 +41,15 @@ async def give_player_item(model: GiveItemModel, request: Request):
     player_collection = request.app.state.mongodb[MONGODB_DB][MONGODB_PLAYERS_COLLECTION]
     player_collection.update_one({"name": model.player_name, "inventory.item": model.item},
                                  {"$inc": {"inventory.$.amount": model.amount}})
-    return
+    return "OK"
 
 
 @demo_router.post("/level_up_player", status_code=status.HTTP_200_OK)
 async def level_up_player(player_name: str, request: Request):
     player_collection = request.app.state.mongodb[MONGODB_DB][MONGODB_PLAYERS_COLLECTION]
     player = await player_collection.find_one_and_update({"name": player_name}, {"$inc": {"level": 1}, "$set": {"experience": 0}})
+    if player is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Player {player_name} not found")
     if player["level"] < MAX_LEVEL-1:
         await update_player_inventory(player_name, PLAYER_LEVELS[player["level"]]["rewards"], player_collection)
     return

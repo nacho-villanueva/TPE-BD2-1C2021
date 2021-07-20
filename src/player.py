@@ -7,7 +7,7 @@ from pydantic import Field
 from pydantic.main import BaseModel
 
 from src.configurations import *
-from src.level_info import PLAYER_LEVELS
+from src.level_info import PLAYER_LEVELS, POKEMON_LEVEL
 from src.models import CoordinatesModel, PlayerModel
 from src.utils import get_distance
 
@@ -146,7 +146,8 @@ async def update_player_exp(player_object, increment_exp, state):
     if player_object["level"] < MAX_LEVEL and PLAYER_LEVELS[player_object["level"]]["exp"] <= new_exp:
         new_level = player_object["level"] + 1
         new_exp -= PLAYER_LEVELS[player_object["level"]]["exp"]
-        await update_player_inventory(player_object["name"], PLAYER_LEVELS[player_object["level"]]["rewards"], player_collection)
+        await update_player_inventory(player_object["name"], PLAYER_LEVELS[player_object["level"]]["rewards"],
+                                      player_collection)
     player_collection.update_one({"name": player_object["name"]}, {
         "$set": {
             "level": new_level,
@@ -161,3 +162,38 @@ async def get_nearby_players(name: str, request: Request, radius: Optional[int] 
     found = [x.decode() for x in found]
     found.remove(name)
     return found
+
+
+@player_router.get("/{name}/pokemon/{index}")
+async def get_pokemon_from_team(name: str, index: int, request: Request):
+    player_collection = request.app.state.mongodb[MONGODB_DB][MONGODB_PLAYERS_COLLECTION]
+    player = await player_collection.find_one({"name": name})
+    if player is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Player {name} not found")
+
+    if len(player["pokemons"]) <= index:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Pokemon index {index} out of range")
+
+    return player["pokemons"][index]
+
+
+@player_router.post("/{name}/pokemon/{index}")
+async def level_up_pokemon(name: str, index: int, request: Request):
+    player_collection = request.app.state.mongodb[MONGODB_DB][MONGODB_PLAYERS_COLLECTION]
+    player = await player_collection.find_one({"name": name})
+    if player is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Player {name} not found")
+
+    if len(player["pokemons"]) <= index:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Pokemon index {index} out of range")
+
+    pokemon = player["pokemons"][index]
+
+    if pokemon["level"] >= MAX_LEVEL:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Pokemon reached max level")
+    if player["stardust"] < POKEMON_LEVEL[pokemon["level"]]["stardust_needed"]:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
+                            detail=f"Not enough stardust. Current: {player['stardust']} - Needed: {POKEMON_LEVEL[pokemon['level']]['stardust_needed']}")
+
+    await player_collection.update_one({"name": name}, {"$inc": {f"pokemons.{index}.level": 1,
+                                                                 "stardust": -POKEMON_LEVEL[pokemon['level']]['stardust_needed']}})
