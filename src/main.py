@@ -4,9 +4,10 @@ from aioredis import create_redis_pool
 from fastapi import FastAPI
 from motor.motor_asyncio import AsyncIOMotorClient
 
+from src.demo import demo_router
 from src.configurations import *
 from src.player import player_router, player_end_session
-from src.pokemon import pokemon_router, pokemon_expiration, pokemon_spawner
+from src.pokemon import pokemon_router, pokemon_expiration
 
 app = FastAPI(
     title="Pokemon GO",
@@ -15,12 +16,7 @@ app = FastAPI(
 
 app.include_router(player_router)
 app.include_router(pokemon_router)
-
-
-async def pokemon_loop(state):
-    state.total_pokemon_types = await state.mongodb[MONGODB_DB][MONGODB_POKEMONS_COLLECTION].count_documents({})
-    while state.is_running:
-        await pokemon_spawner(state)
+app.include_router(demo_router)
 
 
 async def reader(channel, state):
@@ -50,7 +46,6 @@ async def startup_event():
 
     ch, = await app.state.redis.psubscribe('__key*__:expired')
     asyncio.get_running_loop().create_task(reader(ch, app.state))
-    asyncio.ensure_future(pokemon_loop(app.state))
 
 
 @app.on_event("shutdown")

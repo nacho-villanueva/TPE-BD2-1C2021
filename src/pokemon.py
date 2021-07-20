@@ -41,7 +41,7 @@ async def get_pokemon_type(pokemon_type: str, request: Request):
 
 
 @pokemon_router.put("/spawn_pokemons", response_model=List)
-async def spawn_pokemon(coords: CoordinatesModel, request: Request):
+async def spawn_pokemons(coords: CoordinatesModel, request: Request, sample_size: Optional[int] = 10):
     pokemons = request.app.state.mongodb[MONGODB_DB][MONGODB_POKEMONS_COLLECTION].aggregate([{"$sample": {"size": 10}}])
 
     pokemons_ret = []
@@ -153,25 +153,3 @@ async def catch_pokemon(body: CatchModel, request: Request):
 async def pokemon_expiration(pokemon_type, pokemon_id, state):
     print(f"Pokemon Expired: {pokemon_type}:{pokemon_id}")
     remove_pokemon(pokemon_type + ":" + pokemon_id, state, remove_expire=False)
-
-
-async def pokemon_spawner(state):
-    redis: Redis = state.redis
-
-    player_count = await redis.get("count:players")
-    pokemons_to_spawn = player_count * POKEMON_SPAWN_TIME_MULTIPLIER
-
-    pokemons = await state.mongodb[MONGODB_DB][MONGODB_POKEMONS_COLLECTION].aggregate(
-        [{"$sample": {"size": 100}}]).to_list(100)
-
-    # i = 0
-    #
-    # for p in pokemons:
-    #     print(p["name"], i)
-    #     i += 1
-    #
-    # for p in pokemons:
-    #     print(p["name"], i)
-    #     i += 1
-
-    await asyncio.sleep(random.randint(POKEMON_SPAWN_TIME_MIN, POKEMON_SPAWN_TIME_MAX))

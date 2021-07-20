@@ -1,4 +1,5 @@
 import asyncio
+from typing import Optional, List
 
 from fastapi import APIRouter, HTTPException, Request, status
 from fastapi.responses import JSONResponse
@@ -24,16 +25,20 @@ def renew_player_expiration(name, state):
     asyncio.ensure_future(state.redis.expire(f"players:{name}:expire", PLAYER_EXPIRATION))
 
 
-@player_router.post("/{name}/")
-async def login_player(user: NameNCoordsModel, request: Request):
+async def login_player(user, coordinates: CoordinatesModel, state):
+    await asyncio.wait([
+        state.redis.geoadd("players", coordinates.lat, coordinates.long, user["name"]),
+        state.redis.hset(f"players:{user['name']}", "walked_distance", 0),
+        state.redis.setex(f"players:{user['name']}:expire", PLAYER_EXPIRATION, "EXPIRE"),
+        state.redis.incr("count:players")
+    ])
+
+
+@player_router.post("/")
+async def login(user: NameNCoordsModel, request: Request):
     collection = request.app.state.mongodb[MONGODB_DB][MONGODB_PLAYERS_COLLECTION]
-    if await collection.find_one({'name': user.player_name}) is not None:
-        await asyncio.wait([
-            request.app.state.redis.geoadd("players", user.coordinates.lat, user.coordinates.long, user.player_name),
-            request.app.state.redis.hset(f"players:{user.player_name}", "walked_distance", 0),
-            request.app.state.redis.setex(f"players:{user.player_name}:expire", PLAYER_EXPIRATION, "EXPIRE"),
-            request.app.state.redis.incr("count:players")
-        ])
+    if (player := await collection.find_one({'name': user.player_name})) is not None:
+        await login_player(player, user.coordinates, request.app.state)
         return
     return HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"User {user.player_name} not registered")
 
@@ -117,6 +122,23 @@ async def player_end_session(name, state):
     await state.redis.decr("count:players")
 
 
+async def update_player_inventory(player_name, rewards, player_collection):
+    player = await player_collection.find_one({"name": player_name})
+    inventory = player["inventory"]
+
+    for r in rewards:
+        found = False
+        for i in inventory:
+            if i["item"] == r["item"]:
+                i["amount"] += r["amount"]
+                found = True
+                break
+        if not found:
+            inventory.append(r)
+
+    return player_collection.update_one({"name": player_name}, {"$set": {"inventory": inventory}})
+
+
 async def update_player_exp(player_object, increment_exp, state):
     player_collection = state.mongodb[MONGODB_DB][MONGODB_PLAYERS_COLLECTION]
     new_exp = player_object["experience"] + increment_exp
@@ -124,9 +146,18 @@ async def update_player_exp(player_object, increment_exp, state):
     if player_object["level"] < MAX_LEVEL and PLAYER_LEVELS[player_object["level"]]["exp"] <= new_exp:
         new_level = player_object["level"] + 1
         new_exp -= PLAYER_LEVELS[player_object["level"]]["exp"]
+        await update_player_inventory(player_object["name"], PLAYER_LEVELS[player_object["level"]]["rewards"], player_collection)
     player_collection.update_one({"name": player_object["name"]}, {
         "$set": {
             "level": new_level,
             "experience": new_exp
         }
     })
+
+
+@player_router.get("/{name}/nearby", status_code=200, response_model=List)
+async def get_nearby_players(name: str, request: Request, radius: Optional[int] = 50):
+    found = await request.app.state.redis.georadiusbymember("players", name, radius, unit="m")
+    found = [x.decode() for x in found]
+    found.remove(name)
+    return found
