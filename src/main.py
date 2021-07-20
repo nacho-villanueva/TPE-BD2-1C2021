@@ -5,7 +5,7 @@ from aioredis.pubsub import Receiver
 from fastapi import FastAPI
 from motor.motor_asyncio import AsyncIOMotorClient
 
-from src.pokemon import pokemon_router
+from src.pokemon import pokemon_router, pokemon_expiration
 from src.player import player_router, player_session_expiration
 from src.configurations import *
 
@@ -23,6 +23,8 @@ async def reader(channel, state):
         vals = message.decode("utf-8").split(":")
         if len(vals) == 3 and vals[0] == "players" and vals[2] == "expire":
             asyncio.ensure_future(player_session_expiration(vals[1], state))
+        if len(vals) == 4 and vals[0] == "pokemons" and vals[3] == "expire":
+            asyncio.ensure_future(pokemon_expiration(vals[1], vals[2], state))
 
 
 @app.on_event("startup")
@@ -35,6 +37,7 @@ async def startup_event():
 
     ch, = await app.state.redis.psubscribe('__key*__:expired')
     asyncio.get_running_loop().create_task(reader(ch, app.state))
+
 
 
 @app.on_event("shutdown")

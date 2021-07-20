@@ -36,7 +36,7 @@ def generate_nearby_pos(lat, lon, distance):
     x = w * np.cos(t)
     x1 = x / np.cos(lon)
     y = w * np.sin(t)
-    return (lat + x1, lon + y)
+    return float(lat + x1), float(lon + y)
 
 
 print(get_distance(-34.480408360711515, -58.50684100026928, -34.47806466991218, -58.50277477154357))

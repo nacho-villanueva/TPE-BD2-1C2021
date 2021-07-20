@@ -1,40 +1,16 @@
 import asyncio
-from datetime import datetime
 from typing import List
 
 from fastapi import APIRouter, HTTPException, Request, status
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, Field
-from pokemon import PokemonModel
 
-from src.models import CoordinatesModel
 from src.configurations import *
 from src.level_info import PLAYER_LEVELS
+from src.models import CoordinatesModel, PokemonModel, PlayerModel
 from src.utils import get_distance
 
 # Player will logout after 1 hour = 60 * 60 seconds
-PLAYER_EXPIRATION = 60 * 60
-
-
-class Message(BaseModel):
-    message: str
-
-
-class PlayerModel(BaseModel):
-    name: str = Field(..., example="Ash_Ketchum")
-    level: int = Field(..., example=39)
-    experience: int = Field(..., example=883025)
-    stardust: int = Field(..., example=91879)
-    total_caught: int = Field(..., example=2350)
-    walked_distance: int = Field(..., example=2350)
-    inventory: list = Field(..., example=[{"item": "Poke Ball", "amount": 269}, {"item": "Potion", "amount": 27}])
-    pokemons: list = Field(..., example=[
-        {"name": "Pikachu", "pokemon_type": "Pikachu", "level": 4, "sex": "MALE", "weight": 5.34, "height": 0.35,
-         "health": 76, "cp": 896, "capture_timestamp": datetime.fromisoformat("2017-06-01T04:00:00.528+00:00")}])
-
-    def __str__(self):
-        return self.name
-
+PLAYER_EXPIRATION = 30
 
 player_router = APIRouter(prefix="/player", tags=["Player Requests"])
 
@@ -120,32 +96,22 @@ async def get_player(name: str, request: Request):
 
 
 async def player_session_expiration(name, state):
-    state.redis.zrem("players", name)
+    print(f"Player Session Expired: {name}")
+    await state.redis.zrem("players", name)
     walked = float(await state.redis.hget(f"players:{name}", "walked_distance"))
     if walked > 0:
         update_mongo_distance(name, walked, state)
     await state.redis.delete(f"players:{name}")
 
 
-@player_router.get("/{name}/nearby", status_code=status.HTTP_200_OK, response_model=List[PokemonModel])
-async def get_nearby_pokemons(name: str, request: Request):
-    pos = await request.app.state.redis.geopos("players", name, withcoords = True)
-    found = await request.app.state.redis.georadius("pokemons", pos[0][0], pos[0][1], 20, unit="m")
-    if len(found) > 0:
-        return found
-
-    return HTTPException(status_code=status.HTTP_409_CONFLICT, detail=f"Pokemons not found nearby")
-
-
-
-
 async def update_player_exp(player_object, increment_exp, state):
-    new_exp = PLAYER_LEVELS[player_object["level"]]["exp"] + increment_exp
+    player_collection = state.mongodb[MONGODB_DB][MONGODB_PLAYERS_COLLECTION]
+    new_exp = player_object["experience"] + increment_exp
     new_level = player_object["level"]
     if player_object["level"] < MAX_LEVEL and PLAYER_LEVELS[player_object["level"]]["exp"] <= new_exp:
         new_level = player_object["level"] + 1
         new_exp -= PLAYER_LEVELS[player_object["level"]]["exp"]
-    state.mongodb.update({"name": player_object["name"]}, {
+    player_collection.update_one({"name": player_object["name"]}, {
         "$set": {
             "level": new_level,
             "experience": new_exp
