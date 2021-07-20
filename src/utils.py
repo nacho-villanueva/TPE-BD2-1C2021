@@ -39,9 +39,6 @@ def generate_nearby_pos(lat, lon, distance):
     return float(lat + x1), float(lon + y)
 
 
-print(get_distance(-34.480408360711515, -58.50684100026928, -34.47806466991218, -58.50277477154357))
-
-
 def print_init_title():
     print("""
     PPPPPPPPPPPPPPPPP                   kkkkkkkk                                                                                                    GGGGGGGGGGGGG                 

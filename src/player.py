@@ -1,37 +1,47 @@
 import asyncio
-from typing import List
 
 from fastapi import APIRouter, HTTPException, Request, status
 from fastapi.responses import JSONResponse
+from pydantic import Field
+from pydantic.main import BaseModel
 
 from src.configurations import *
 from src.level_info import PLAYER_LEVELS
-from src.models import CoordinatesModel, PokemonModel, PlayerModel
+from src.models import CoordinatesModel, PlayerModel
 from src.utils import get_distance
 
 # Player will logout after 1 hour = 60 * 60 seconds
-PLAYER_EXPIRATION = 30
 
 player_router = APIRouter(prefix="/player", tags=["Player Requests"])
 
 
+class NameNCoordsModel(BaseModel):
+    player_name: str = Field(..., example="Ash_Ketchum01")
+    coordinates: CoordinatesModel
+
+
+def renew_player_expiration(name, state):
+    asyncio.ensure_future(state.redis.expire(f"players:{name}:expire", PLAYER_EXPIRATION))
+
+
 @player_router.post("/{name}/")
-async def login_player(name: str, coords: CoordinatesModel, request: Request):
+async def login_player(user: NameNCoordsModel, request: Request):
     collection = request.app.state.mongodb[MONGODB_DB][MONGODB_PLAYERS_COLLECTION]
-    if await collection.find_one({'name': name}) is not None:
+    if await collection.find_one({'name': user.player_name}) is not None:
         await asyncio.wait([
-            request.app.state.redis.geoadd("players", coords.lat, coords.long, name),
-            request.app.state.redis.hset(f"players:{name}", "walked_distance", 0),
-            request.app.state.redis.setex(f"players:{name}:expire", PLAYER_EXPIRATION, "EXPIRE")
+            request.app.state.redis.geoadd("players", user.coordinates.lat, user.coordinates.long, user.player_name),
+            request.app.state.redis.hset(f"players:{user.player_name}", "walked_distance", 0),
+            request.app.state.redis.setex(f"players:{user.player_name}:expire", PLAYER_EXPIRATION, "EXPIRE"),
+            request.app.state.redis.incr("count:players")
         ])
         return
-    return HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"User {name} not registered")
+    return HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"User {user.player_name} not registered")
 
 
 @player_router.post("/{name}/logout")
 async def logout_player(name: str, request: Request):
     await request.app.state.redis.delete(f"players:{name}:expire")
-    await player_session_expiration(name, request.app.state)
+    await player_end_session(name, request.app.state)
 
 
 @player_router.put("/{name}", status_code=status.HTTP_201_CREATED, response_model=PlayerModel,
@@ -68,13 +78,15 @@ async def update_distance(old_pos, new_pos, name, state):
 
 
 @player_router.post("/{name}/move", status_code=status.HTTP_200_OK, description="Move player to new coordinates.")
-async def move_player(name: str, new_position: CoordinatesModel, request: Request):
-    old_pos = await request.app.state.redis.geopos("players", name)
+async def move_player(body: NameNCoordsModel, request: Request):
+    old_pos = await request.app.state.redis.geopos("players", body.player_name)
     if len(old_pos) == 1:
-        asyncio.ensure_future(request.app.state.redis.geoadd("players", new_position.lat, new_position.long, name))
-        asyncio.ensure_future(update_distance(old_pos[0], new_position, name, request.app.state))
+        asyncio.ensure_future(
+            request.app.state.redis.geoadd("players", body.coordinates.lat, body.coordinates.long, body.player_name))
+        asyncio.ensure_future(update_distance(old_pos[0], body.coordinates, body.player_name, request.app.state))
+        renew_player_expiration(body.player_name, request.app.state)
         return
-    return HTTPException(status_code=status.HTTP_409_CONFLICT, detail=f"Player {name} not found")
+    return HTTPException(status_code=status.HTTP_409_CONFLICT, detail=f"Player {body.player_name} not found")
 
 
 @player_router.get("/{name}/position", status_code=status.HTTP_200_OK, response_model=CoordinatesModel)
@@ -95,13 +107,14 @@ async def get_player(name: str, request: Request):
     raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Player {name} not found")
 
 
-async def player_session_expiration(name, state):
-    print(f"Player Session Expired: {name}")
+async def player_end_session(name, state):
+    print(f"Player Session Ended: {name}")
     await state.redis.zrem("players", name)
     walked = float(await state.redis.hget(f"players:{name}", "walked_distance"))
     if walked > 0:
         update_mongo_distance(name, walked, state)
     await state.redis.delete(f"players:{name}")
+    await state.redis.decr("count:players")
 
 
 async def update_player_exp(player_object, increment_exp, state):
