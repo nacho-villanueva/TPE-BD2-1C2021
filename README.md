@@ -8,6 +8,9 @@ This project consists in an attempt of a reduced replica of the Pokemon GO API, 
 
 FastApi was used in order to create the API.
 
+[First Presentation](https://docs.google.com/presentation/d/1ld2J6ong3L5dcitGduoey7OpWGxil73MKViuQQxK58g/edit?usp=sharing)
+[Second Presentation](https://docs.google.com/presentation/d/1dzj4EkqHkTO4aqoLu17pcarjjC8DsWFhPe-uBUsV5II/edit?usp=sharing)
+
 ## Getting Started 🚀
 
 ### Dependencies
