@@ -4,10 +4,10 @@ from aioredis import create_redis_pool
 from fastapi import FastAPI
 from motor.motor_asyncio import AsyncIOMotorClient
 
-from src.demo import demo_router
-from src.configurations import *
-from src.player import player_router, player_end_session
-from src.pokemon import pokemon_router, pokemon_expiration
+from .demo import demo_router
+from .configurations import *
+from .player import player_router, player_end_session
+from .pokemon import pokemon_router, pokemon_expiration
 
 app = FastAPI(
     title="Pokemon GO",

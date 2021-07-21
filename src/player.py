@@ -6,10 +6,10 @@ from fastapi.responses import JSONResponse
 from pydantic import Field
 from pydantic.main import BaseModel
 
-from src.configurations import *
-from src.level_info import PLAYER_LEVELS, POKEMON_LEVEL
-from src.models import CoordinatesModel, PlayerModel
-from src.utils import get_distance
+from .configurations import *
+from .level_info import PLAYER_LEVELS, POKEMON_LEVEL
+from .models import CoordinatesModel, PlayerModel
+from .utils import get_distance
 
 # Player will logout after 1 hour = 60 * 60 seconds
 

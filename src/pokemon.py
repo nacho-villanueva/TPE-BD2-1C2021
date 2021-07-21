@@ -10,11 +10,11 @@ from fastapi import APIRouter, Request, HTTPException, status
 from pydantic import Field
 from pydantic.main import BaseModel
 
-from src.models import PokemonModel
-from src.player import update_player_exp, renew_player_expiration
-from src.models import CoordinatesModel
-from src.configurations import *
-from src.utils import generate_nearby_pos, get_distance
+from .models import PokemonModel
+from .player import update_player_exp, renew_player_expiration
+from .models import CoordinatesModel
+from .configurations import *
+from .utils import generate_nearby_pos, get_distance
 
 pokemon_router = APIRouter(prefix="/pokemon", tags=["Pokemon Requests"])
 
