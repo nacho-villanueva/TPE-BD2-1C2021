@@ -48,4 +48,4 @@ Once the server is running, you can head to ```127.0.0.1:8000/docs``` where you 
 
 Ignacio Villanueva - [Webpage](https://ignacio.villanueva.it/) - [LinkedIn](https://www.linkedin.com/in/ignacio-villanueva-256541176) -
 
-Gabriel Silvaticy - [LinkedIn]()
+Gabriel Silvatici - [LinkedIn](https://www.linkedin.com/in/gabriel-silvatici-dayan-233b87b3/) -
